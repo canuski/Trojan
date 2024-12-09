@@ -1,5 +1,5 @@
 {
-    "modules": ["netwerk_scanner"],
+    "modules": ["ping_module"],
     "frequency": 120
 }
 
