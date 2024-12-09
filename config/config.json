@@ -1,5 +1,5 @@
 {
-    "modules": ["network_scanner"],
+    "modules": ["netwerk_scanner"],
     "frequency": 120
 }
 
