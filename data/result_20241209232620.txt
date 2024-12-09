@@ -1,0 +1,11 @@
+Host: 192.168.56.1 ()
+  - Poorten: [135, 137, 139, 445]
+  - Status: up
+  - OS: Microsoft Windows 10 1607 - 11 23H2
+Host: 192.168.81.14 ()
+  - Poorten: [135, 137, 445]
+  - Status: up
+  - OS: Microsoft Windows 10 1607 - 11 23H2
+Fout bij uitvoeren van Nmap-scan op 192.168.0.0/24: list index out of range
+Geen actieve hosts gevonden op 169.254.0.0/24.
+Fout bij uitvoeren van Nmap-scan op 127.0.0.0/24: list index out of range
