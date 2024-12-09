@@ -35,21 +35,28 @@ def get_local_subnets():
         return None
 
 def scan_network_with_nmap(subnet):
-    """Gebruik Nmap om een netwerk te scannen."""
+    """Gebruik Nmap om een netwerk te scannen met besturingssysteemdetectie en een stille scan."""
     nm = nmap.PortScanner()
 
     try:
         print(f"Start netwerkscan op {subnet} met Nmap...")
-        # Voer de scan uit op het subnet
-        nm.scan(hosts=subnet, arguments='-p 22-1024')  # Scan poorten 22-1024
+        # Voer de scan uit op het subnet met -O (besturingssysteemdetectie) en -T4 (silente scan)
+        nm.scan(hosts=subnet, arguments='-p 22-1024 -O -T4')  # Scan poorten 22-1024, OS-detectie en stille scan
         print(f"Scanresultaten voor {subnet}:")
-
+        
         # Toon alle gehoste systemen en hun status
         results = []
         for host in nm.all_hosts():
             result = f"Host: {host} ({nm[host].hostname()})"
             result += f"\n  - Poorten: {nm[host].all_tcp()}"
             result += f"\n  - Status: {nm[host].state()}"
+            
+            # Voeg besturingssysteeminformatie toe als beschikbaar
+            if 'osmatch' in nm[host]:
+                result += f"\n  - OS: {nm[host]['osmatch'][0]['name']}"
+            else:
+                result += "\n  - OS: Niet gedetecteerd"
+                
             results.append(result)
 
         if results:
