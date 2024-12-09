@@ -3,18 +3,18 @@ import requests
 import nmap
 import ipaddress
 import psutil
+import socket  # Dit wordt toegevoegd voor het gebruik van socket.AF_INET
 
 def run():
     """Netwerkscan uitvoeren op alle beschikbare interfaces."""
     # Verkrijg de lokale netwerkinterfaces en hun subnetten
-    
     interfaces = psutil.net_if_addrs()
-    
+
     print("Beschikbare netwerkinterfaces:")
     for interface_name, interface_addresses in interfaces.items():
         print(f"{interface_name}:")
         for address in interface_addresses:
-            if address.family == psutil.AF_INET:
+            if address.family == socket.AF_INET:  # Gebruik socket.AF_INET in plaats van psutil.AF_INET
                 subnet = ipaddress.IPv4Network(address.netmask, strict=False)
                 print(f"  - IP: {address.address}, Subnet: {subnet}")
                 scan_network(subnet)
@@ -40,4 +40,3 @@ def scan_network(subnet):
         return "\n".join(results)
     else:
         return f"Geen actieve hosts gevonden op {subnet}."
-
