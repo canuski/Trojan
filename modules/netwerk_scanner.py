@@ -6,22 +6,29 @@ import platform
 def get_local_subnet():
     """Berekent het subnet op basis van het lokale IP-adres en subnetmasker, controleert eerst Ethernet, dan Wi-Fi."""
     try:
+        # Log alle beschikbare netwerkinterfaces
+        print("Beschikbare netwerkinterfaces:")
+        interfaces_to_check = netifaces.interfaces()
+        print(interfaces_to_check)
+
         # Eerst proberen we 'Ethernet', daarna 'Wi-Fi' voor Windows
         interfaces_to_check = ['Ethernet', 'Wi-Fi']
-
+        
         for iface in interfaces_to_check:
-            try:
-                # Verkrijg het IP-adres en subnetmasker van de interface
-                ip_address = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['addr']
-                netmask = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['netmask']
-                
-                # Bereken het subnet
-                network = ipaddress.IPv4Network(f'{ip_address}/{netmask}', strict=False)
-                print(f"Subnet gevonden op {iface}: {network.network_address}/24")
-                return str(network.network_address) + "/24"  # Subnet in /24-formaat (bijvoorbeeld 192.168.1.0/24)
-            except KeyError:
-                # Als de interface geen IP-adres heeft, gaan we naar de volgende
-                continue
+            if iface in interfaces_to_check:
+                try:
+                    # Verkrijg het IP-adres en subnetmasker van de interface
+                    ip_address = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['addr']
+                    netmask = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['netmask']
+                    
+                    # Bereken het subnet
+                    network = ipaddress.IPv4Network(f'{ip_address}/{netmask}', strict=False)
+                    print(f"Subnet gevonden op {iface}: {network.network_address}/24")
+                    return str(network.network_address) + "/24"  # Subnet in /24-formaat (bijvoorbeeld 192.168.1.0/24)
+                except KeyError:
+                    # Als de interface geen IP-adres heeft, gaan we naar de volgende
+                    print(f"Geen IP-adres voor interface: {iface}")
+                    continue
         
         # Als we hier komen, is geen van de interfaces geschikt
         print("Geen geldig subnet gevonden op Ethernet of Wi-Fi.")
