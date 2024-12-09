@@ -1,42 +1,74 @@
-import time
-import requests
-import nmap
+import netifaces
 import ipaddress
-import psutil
-import socket  # Dit wordt toegevoegd voor het gebruik van socket.AF_INET
+import nmap
 
-def run():
-    """Netwerkscan uitvoeren op alle beschikbare interfaces."""
-    # Verkrijg de lokale netwerkinterfaces en hun subnetten
-    interfaces = psutil.net_if_addrs()
+def get_local_subnets():
+    """Berekent de subnetten van alle netwerkinterfaces die een geldig IP-adres hebben."""
+    subnets = []
+    try:
+        # Verkrijg de netwerkinterfaces
+        interfaces = netifaces.interfaces()
+        print("Beschikbare netwerkinterfaces:", interfaces)
 
-    print("Beschikbare netwerkinterfaces:")
-    for interface_name, interface_addresses in interfaces.items():
-        print(f"{interface_name}:")
-        for address in interface_addresses:
-            if address.family == socket.AF_INET:  # Gebruik socket.AF_INET in plaats van psutil.AF_INET
-                subnet = ipaddress.IPv4Network(address.netmask, strict=False)
-                print(f"  - IP: {address.address}, Subnet: {subnet}")
-                scan_network(subnet)
+        for iface in interfaces:
+            try:
+                # Verkrijg het IP-adres en subnetmasker van de interface
+                ip_address = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['addr']
+                netmask = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['netmask']
+                
+                # Bereken het subnet
+                network = ipaddress.IPv4Network(f'{ip_address}/{netmask}', strict=False)
+                print(f"Subnet gevonden op interface {iface}: {network.network_address}/24")
+                subnets.append(str(network.network_address) + "/24")  # Voeg het subnet toe in /24-formaat
+            except (KeyError, IndexError):
+                print(f"Geen geldig IP-adres voor interface {iface}.")
+                continue
+        
+        if not subnets:
+            print("Geen geldig subnet gevonden op een van de interfaces.")
+            return None
+        
+        return subnets
 
-def scan_network(subnet):
-    """Voer een Nmap scan uit voor een specifiek subnet."""
-    print(f"Start netwerkscan op {subnet} met Nmap...")
+    except Exception as e:
+        print(f"Fout bij ophalen subnet: {e}")
+        return None
+
+def scan_network_with_nmap(subnet):
+    """Gebruik Nmap om een netwerk te scannen."""
     nm = nmap.PortScanner()
-    nm.scan(hosts=str(subnet), arguments='-p 22,80,443')
 
-    # Verwerk de resultaten
-    results = []
-    for host in nm.all_hosts():
-        if nm[host].state() == "up":
+    try:
+        print(f"Start netwerkscan op {subnet} met Nmap...")
+        # Voer de scan uit op het subnet
+        nm.scan(hosts=subnet, arguments='-p 22-1024')  # Scan poorten 22-1024
+        print(f"Scanresultaten voor {subnet}:")
+
+        # Toon alle gehoste systemen en hun status
+        results = []
+        for host in nm.all_hosts():
             result = f"Host: {host} ({nm[host].hostname()})"
-            for proto in nm[host].all_protocols():
-                lport = nm[host][proto].keys()
-                for port in lport:
-                    result += f"  - Poort: {port} (Status: {nm[host][proto][port]['state']})"
+            result += f"\n  - Poorten: {nm[host].all_tcp()}"
+            result += f"\n  - Status: {nm[host].state()}"
             results.append(result)
 
-    if results:
-        return "\n".join(results)
+        if results:
+            return "\n".join(results)
+        else:
+            return f"Geen actieve hosts gevonden op {subnet}."
+
+    except Exception as e:
+        return f"Fout bij uitvoeren van Nmap-scan op {subnet}: {e}"
+
+def run():
+    """Netwerkscan uitvoeren voor alle interfaces."""
+    subnets = get_local_subnets()
+
+    if subnets:
+        scan_results = []
+        for subnet in subnets:
+            result = scan_network_with_nmap(subnet)
+            scan_results.append(result)
+        return "\n".join(scan_results)
     else:
-        return f"Geen actieve hosts gevonden op {subnet}."
+        return "Geen geldige subnetten gevonden, kan geen scan uitvoeren."
