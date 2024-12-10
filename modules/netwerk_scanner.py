@@ -15,7 +15,12 @@ def get_local_subnets():
                 # Verkrijg het IP-adres en subnetmasker van de interface
                 ip_address = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['addr']
                 netmask = netifaces.ifaddresses(iface)[netifaces.AF_INET][0]['netmask']
-                
+
+                # Exclude loopback and link-local networks
+                if ip_address.startswith("127.") or ip_address.startswith("169.254."):
+                    print(f"Special-purpose network {ip_address} wordt overgeslagen.")
+                    continue
+
                 # Bereken het subnet
                 network = ipaddress.IPv4Network(f'{ip_address}/{netmask}', strict=False)
                 print(f"Subnet gevonden op interface {iface}: {network.network_address}/24")
@@ -23,11 +28,11 @@ def get_local_subnets():
             except (KeyError, IndexError):
                 print(f"Geen geldig IP-adres voor interface {iface}.")
                 continue
-        
+
         if not subnets:
             print("Geen geldig subnet gevonden op een van de interfaces.")
             return None
-        
+
         return subnets
 
     except Exception as e:
@@ -40,23 +45,21 @@ def scan_network_with_nmap(subnet):
 
     try:
         print(f"Start netwerkscan op {subnet} met Nmap...")
-        # Voer de scan uit op het subnet met -O (besturingssysteemdetectie) en -T4 (silente scan)
         nm.scan(hosts=subnet, arguments='-p 22-1024 -O -T4')  # Scan poorten 22-1024, OS-detectie en stille scan
         print(f"Scanresultaten voor {subnet}:")
-        
-        # Toon alle gehoste systemen en hun status
+
         results = []
         for host in nm.all_hosts():
             result = f"Host: {host} ({nm[host].hostname()})"
             result += f"\n  - Poorten: {nm[host].all_tcp()}"
             result += f"\n  - Status: {nm[host].state()}"
-            
-            # Voeg besturingssysteeminformatie toe als beschikbaar
-            if 'osmatch' in nm[host]:
+
+            # Check for OS information
+            if 'osmatch' in nm[host] and nm[host]['osmatch']:
                 result += f"\n  - OS: {nm[host]['osmatch'][0]['name']}"
             else:
                 result += "\n  - OS: Niet gedetecteerd"
-                
+
             results.append(result)
 
         if results:
